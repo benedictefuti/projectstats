@@ -1,0 +1,937 @@
+---
+title: "project"
+author: "Benedicte Futi (711167)"
+date: "September 3, 2017"
+output: md_document
+---
+
+
+Pin Prick
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE)
+#LOAD ALL PACKAGES
+
+
+library(ggplot2)
+library(scales)
+library(grid)
+library(cowplot)
+library(PMCMR) # pairwise Friedman posthoc tests
+library(metafor) # arcsine transform
+library(nlme) # mixed effect 'lme'
+library(gamlss) # GAM using beta distribution
+library(lsr) # Cohen's D
+library(knitr)
+library(pander)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(boot) # Bootstrap 95% CI
+
+
+
+Prickdata <- read.csv("prick2.csv")
+Prickdata
+dim(Prickdata)
+head(Prickdata)
+tail(Prickdata)
+summary(Prickdata)
+
+## data summary
+#[1] 33  4
+ #      id          period         am              pm       
+ #Min.   : 1   Baseline:11   Min.   : 32.0   Min.   : 32.0  
+ #1st Qu.: 3   Fnap    :11   1st Qu.: 64.0   1st Qu.:128.0  
+ #Median : 6   Fno     :11   Median :128.0   Median :128.0  
+ #Mean   : 6                 Mean   :116.4   Mean   :124.1  
+ #3rd Qu.: 9                 3rd Qu.:128.0   3rd Qu.:128.0  
+ #Max.   :11                 Max.   :256.0   Max.   :256.0  
+
+
+# tidy data
+
+Prick <- Prickdata %>% 
+  mutate(id = factor(id),
+         period= factor(period))
+
+# Convert to long format table  ## pas important ici
+Prick_analysis <- Prick %>%
+    group_by(id, period) %>%
+    gather(key = time, 
+           value = score)
+
+#
+
+
+# plot data
+
+### MORNING
+
+
+ggplot(data= Prick, aes(x= period,
+                              y= am,
+                              colour= period,
+                              fill= period))+
+  geom_boxplot(fatten = 2,
+                 colour = 'blue',
+                 fill = 'blue',
+                 alpha = 0.1) +
+    labs(x = 'Intervention',
+         y = 'Pin-prick threshold (mN)',
+         title = 'Morning Pin-prick theshold')  +
+    theme_cowplot() +
+    theme(legend.position = 'none',
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 8),
+          plot.title = element_text(size = 18))
+
+
+boxplot(am ~ period, data= Prick)
+
+# whisker plot
+
+library(lattice)
+
+bwplot(am ~ period, data = Prick, 
+       xlab = "Interventions",
+       ylab =  "Morning Pin_prick threshold",
+       main= " Pin_prick")
+
+
+
+
+### afternoon plot
+
+
+ggplot(data= Prick, aes(x= period,
+                              y= pm,
+                              colour= period,
+                              fill= period))+
+  geom_boxplot(fatten = 2,
+                 colour = 'green',
+                 fill = 'green',
+                 alpha = 0.1) +
+    labs(x = 'Intervention',
+         y = 'Pin-prick threshold (mN)',
+         title = 'Afternoon Pin-prick theshold')  +
+    theme_cowplot() +
+    theme(legend.position = 'none',
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 8),
+          plot.title = element_text(size = 18))
+
+
+boxplot( pm ~ period, data = Prick)
+
+
+## ANALYSIS
+
+###one-way anova between subjects
+####independant= period
+####dependant= am, and pm ( time)
+
+#morning
+
+anova_am1 <- aov(am ~ period, data =  Prick)
+
+summary ( anova_am1)
+#==> answer morning : 
+#             Df Sum Sq Mean Sq F value Pr(>F)
+#period       2  11729    5865   1.559  0.227
+#Residuals   30 112826    3761 
+
+##One way anova, with error:
+
+aov1 <- aov( am ~ period + 
+               Error(id), data =  Prick)
+
+summary(aov1)
+# Error: id
+#          Df Sum Sq Mean Sq F value Pr(>F)
+#Residuals 10  72673    7267               
+
+#Error: Within
+#          Df Sum Sq Mean Sq F value Pr(>F)  
+#period     2  11729    5865   2.921 0.0771 .
+#Residuals 20  40153    2008                 
+#---
+#Signif. codes:  
+#0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#afternoon
+
+anova_pm1 <- aov(pm ~ period, data =  Prick)
+
+summary(anova_pm1)
+
+#==> anwer afternoon :
+#             Df Sum Sq Mean Sq F value Pr(>F)
+#period       2    248   124.1   0.043  0.958
+#Residuals   30  87319  2910.6  
+
+##One way anova, with error:
+
+aov2 <- aov( am ~ period + 
+               Error(id), data =  Prick)
+
+summary(aov2)
+
+
+#Error: id
+#          Df Sum Sq Mean Sq F value Pr(>F)
+#Residuals 10  72673    7267               
+
+#Error: Within
+#          Df Sum Sq Mean Sq F value Pr(>F)  
+#period     2  11729    5865   2.921 0.0771 .
+#Residuals 20  40153    2008                 
+#---
+#Signif. codes:  
+#0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+### two-way anova
+  
+ try <- aov(formula = am * pm ~ period, data = Prick)
+#Call:
+   #aov(formula = am * pm ~ period, data = Prick)
+
+#Terms:
+#                    period  Residuals
+#Sum of Squares   239901479 5167954479
+#Deg. of Freedom          2         30
+
+#Residual standard error: 13124.98
+#Estimated effects may be unbalanced 
+
+summary(try)
+#            Df    Sum Sq   Mean Sq F value Pr(>F)
+#period       2 2.399e+08 119950739   0.696  0.506
+#Residuals   30 5.168e+09 172265149  
+### pas tres sure
+
+
+
+
+
+```
+
+
+
+
+Sleep Quality
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+sleep_quality <- read.csv("sleepquality.csv")
+
+# explore data
+head(sleep_quality)
+tail(sleep_quality)
+dim(sleep_quality)
+summary(sleep_quality)
+#==>       id          period  
+# Min.   : 1   Baseline:11  
+ #1st Qu.: 3   Fnap    :11  
+# Median : 6   Fno     :11  
+# Mean   : 6   nap     :11  
+# 3rd Qu.: 9                
+# Max.   :11                
+# sleep_quality  
+# Min.   : 6.00  
+# 1st Qu.:41.75  
+# Median :61.50  
+# Mean   :57.36  
+# 3rd Qu.:73.00  
+# Max.   :90.00  
+
+
+#plot sleep quality data
+
+ggplot(sleep_quality, 
+       aes(x = period,
+           y = sleep_quality,
+           colour = period,
+           fill = period)) +
+    geom_boxplot(fatten = 4,
+                 colour = 'blue',
+                 fill = 'blue',
+                 alpha = 0.5) +
+    labs(x = 'Intervention',
+         y = 'Sleep quality (0-100mm VAS)',
+         title = 'Sleep quality') +
+    scale_y_continuous(limits = c(0, 100), expand = c(0,0)) +
+    scale_x_discrete(labels = c('Baseline', 
+                                'Frag no nap',
+                                'Frag nap', 'Nap')) +
+    theme_cowplot() +
+    theme(legend.position = 'none',
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 8),
+          plot.title = element_text(18))
+
+
+#data analysis
+
+#one way Anova
+
+aov_sleepquality <- aov(sleep_quality ~ period, data = sleep_quality)
+
+summary(aov_sleepquality)
+
+#==>          Df Sum Sq Mean Sq F value  Pr(>F)   
+#period       3   6060  2020.1   6.257 0.00139 **
+#Residuals   40  12914   322.9                   
+#---
+#Signif. codes:  
+#0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+#pr moi mm
+#fiedman test
+
+friedman.test(sleep_quality ~ period| id, data = sleep_quality)
+
+#==> 	Friedman rank sum test
+
+#data:  sleep_quality and period and id
+#Friedman chi-squared = 15.327, df = 3, p-value =
+#0.001557
+
+# pairwise post hoc
+
+posthoc.friedman.conover.test(y = sleep_quality$sleep_quality, 
+                              groups = sleep_quality$period, 
+                              blocks = sleep_quality$id, 
+                              p.adjust.method = 'holm')
+
+#==> 	Pairwise comparisons using Conover's test for a two-way	
+#                    balanced complete block design 
+#
+#data:  sleep_quality$sleep_quality , sleep_quality$period and sleep_quality$id 
+
+ #    Baseline Fnap    Fno    
+#Fnap 1.4e-06  -       -      
+#Fno  2.9e-06  0.74184 -      
+#nap  0.05377  0.00063 0.00118
+
+#P value adjustment method: holm 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+POMS
+```{r setup, include=FALSE}
+
+ Poms <- read.csv("poms.csv")
+dim(Poms)
+ head(Poms)
+ tail(Poms)
+ summary(Poms)
+
+#==>       id             period         am              pm       
+# Min.   : 1   Baseline_mo:11   Min.   : 69.0   Min.   : 63.0  
+ #1st Qu.: 3   Fnap_mo    :11   1st Qu.: 85.0   1st Qu.: 84.0  
+# Median : 6   Fno_mo     :11   Median :104.0   Median : 94.0  
+# Mean   : 6                    Mean   :111.2   Mean   :104.2  
+# 3rd Qu.: 9                    3rd Qu.:138.0   3rd Qu.:114.0  
+# Max.   :11                    Max.   :208.0   Max.   :181.0  
+
+
+#PLOT DATA
+  ##Morning
+ bwplot( am ~ period, data = Poms)
+ boxplot(am ~ period, data = Poms)
+
+ #afternoon
+
+bwplot( pm ~ period, data = Poms)
+boxplot(pm ~ period, data = Poms) 
+
+
+#3rd plot both am and pm
+
+poms_plot <- Poms %>%
+    group_by(id, period) %>%
+    gather(key = time, 
+           value = score, 
+           am, 
+           pm)
+
+ggplot(poms_plot, 
+       aes(x = period,
+           y = score,
+           colour = time,
+           fill = time)) +
+    geom_boxplot(fatten = 4, alpha = 0.5) +
+    labs(x = 'Intervention',
+         y = 'Profile of Mood States (POMS) score',
+         title = 'Profile of Mood States (POMS)') +
+    scale_y_continuous(limits = c(75, 125), 
+                       expand = c(0,0)) +
+    scale_x_discrete(labels = c('Baseline', 
+                                'Frag no nap',
+                                'Frag nap')) +
+    theme_cowplot() +
+    theme(legend.position = c(0.9, 0.075),
+          legend.text = element_text(size = 8),
+          legend.title = element_text(size = 8),
+          legend.background = element_rect(fill = 'gray90'),
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 18),
+          plot.title = element_text(size = 18))
+
+
+
+#data analysis
+
+
+
+#Morning
+
+
+
+
+
+##two way anova
+
+anova(lm(score ~ period * time, poms_plot))
+
+#==> Analysis of Variance Table
+
+#Response: score
+#            Df Sum Sq Mean Sq F value  Pr(>F)  
+#period       2   5285 2642.29  2.8632 0.06492 .
+#time         1    795  794.56  0.8610 0.35718  
+#period:time  2    923  461.47  0.5000 0.60901  
+#Residuals   60  55371  922.86                  
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+#Pairwise t test
+
+pairwise.t.test(poms_plot$score, poms_plot$period)
+#==> Pairwise comparisons using t tests with pooled SD 
+
+#data:  poms_plot$score and poms_plot$period 
+
+#     Baseline Fnap 
+#Fnap 0.362    -    
+#Fno  0.057    0.362
+
+#P value adjustment method: holm 
+
+
+pairwise.t.test(poms_plot$score, poms_plot$period, p.adj= "none")
+
+#	Pairwise comparisons using t tests with pooled SD 
+
+#data:  poms_plot$score and poms_plot$period 
+
+#     Baseline Fnap 
+#Fnap 0.295    -    
+#Fno  0.019    0.181
+
+#P value adjustment method: none 
+ 
+
+
+pairwise.t.test(poms_plot$score, poms_plot$time, p.adj= "none")
+
+#==> 	Pairwise comparisons using t tests with pooled SD 
+
+#data:  poms_plot$score and poms_plot$time 
+
+#   am  
+#pm 0.37
+
+#P value adjustment method: none 
+
+
+
+
+
+```
+
+
+PILL
+(not very sure)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pill2 <- read_csv("C:/Users/HP/Desktop/Physiology at wits/Stats/BiostatisticsWits/pill2.csv")
+View(pill2)
+
+#view and tidy data
+
+pill2_analysis <- pill2 %>%
+    group_by(id, period) %>%
+    gather(key = time, 
+           value = severity, 
+           am, 
+           pm)
+
+
+
+# Plot
+library(lattice)
+
+##MORNING
+bwplot(am ~ period, data = pill2)
+ boxplot(am ~ period, data = pill2)
+
+ #afternoon
+
+bwplot( pm ~ period, data = pill2)
+boxplot(pm ~ period, data = pill2) 
+
+
+
+
+##MORMIMG AND AFTERNOON
+
+
+ggplot(pill2_analysis, 
+       aes(x = period,
+           y = severity,
+           colour = time,
+           fill = time)) +
+    geom_boxplot(fatten = 4, alpha = 0.5) +
+    labs(x = 'Intervention',
+         y = 'PILL severity',
+         title = 'PILL SEVERITY') +
+    theme_cowplot() +
+    theme(legend.position = c(0.9, 0.075),
+          legend.text = element_text(size = 8),
+          legend.title = element_text(size = 8),
+          legend.background = element_rect(fill = 'gray90'),
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 18),
+          plot.title = element_text(size = 18))
+
+
+#ANALYSIS
+
+aovpill2 <- aov( severity ~ period, data = pill2_analysis)
+summary(aovpill2)
+
+#             Df Sum Sq Mean Sq F value Pr(>F)
+#period       2   5.82   2.909    1.42  0.249
+#Residuals   63 129.05   2.048
+
+
+
+#how to make it dichototmous???
+
+
+
+
+```
+
+
+VFH
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+vfh <- read.csv("vfh.csv")
+
+
+#plot
+vfh_plot <- vfh %>%
+    group_by(id, period) %>%
+    gather(key = time,
+           value = score, 
+           am.before_mN, 
+           am.after_mN,
+           pm.before_mN, 
+           pm.after_mN)
+
+
+ggplot(vfh_plot, 
+       aes(x = period,
+           y = score,
+           colour = time,
+           fill = time)) +
+    geom_boxplot(fatten = 4, alpha = 0.5) +
+    labs(x = 'Intervention',
+         y = 'von Frey threshold (mN)',
+         title = 'von Frey threshold') +
+    scale_y_continuous(limits = c(0, 5), 
+                       expand = c(0,0)) +
+    scale_x_discrete(labels = c('Baseline', 
+                                'Frag no nap',
+                                'Frag nap'))+
+    theme_cowplot() +
+    theme(legend.position = c(0.12, 0.90),
+          legend.text = element_text(size = 8),
+          legend.title = element_text(size = 10),
+          legend.background = element_rect(fill = 'gray90'),
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 18),
+          plot.title = element_text(size = 18))
+
+#just before plot
+
+vfh_plot2 <- vfh %>%
+    group_by(id, period) %>%
+    gather(key = time,
+           value = score, 
+           am.before_mN, 
+           pm.before_mN)
+
+ggplot(vfh_plot2, 
+       aes(x = period,
+           y = score,
+           colour = time,
+           fill = time)) +
+    geom_boxplot(fatten = 4, alpha = 0.5) +
+    labs(x = 'Intervention',
+         y = 'von Frey threshold (mN)',
+         title = 'von Frey threshold before') +
+    scale_y_continuous(limits = c(0, 5), 
+                       expand = c(0,0)) +
+    scale_x_discrete(labels = c('Baseline', 
+                                'Frag no nap',
+                                'Frag nap'))+
+    theme_cowplot() +
+    theme(legend.position = c(0.12, 0.90),
+          legend.text = element_text(size = 8),
+          legend.title = element_text(size = 10),
+          legend.background = element_rect(fill = 'gray90'),
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 18),
+          plot.title = element_text(size = 18))
+
+
+
+
+
+
+#ANALYSIS
+
+# anova
+aovvfh <- aov(score~ period, data = vfh_plot)
+summary(aovvfh)
+
+#   Df Sum Sq Mean Sq F value Pr(>F)
+#period        2   1.80  0.8996   1.717  0.184
+#Residuals   129  67.61  0.5241 
+
+#anova before
+
+aovvfh.before <- aov(score~ period, data = vfh_plot2)
+summary(aovvfh.before)
+
+# Df Sum Sq Mean Sq F value Pr(>F)
+#period       2  0.252  0.1260   0.493  0.613
+#Residuals   63 16.094  0.2555 
+
+
+
+
+
+```
+
+
+MORNING VIGILANCE
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+morning.vigilance <- read.csv("morningvigilance.csv")
+
+
+#plot data
+
+ggplot(morning.vigilance, 
+       aes(x = period,
+           y = morning_vigilance,
+           colour = period,
+           fill = period)) +
+    geom_boxplot(fatten = 4,
+                 colour = '#666666',
+                 fill = '#666666',
+                 alpha = 0.5) +
+    labs(x = 'Intervention',
+         y = 'Morning vigilance (0-100mm VAS)',
+         title = 'Morning vigilance') +
+    scale_y_continuous(limits = c(0, 100), expand = c(0,0)) +
+    scale_x_discrete(labels = c('Baseline', 
+                                'Frag no nap',
+                                'Frag nap', 'Nap')) +
+    theme_cowplot() +
+    theme(legend.position = 'none',
+          axis.text = element_text(size = 8),
+          axis.title = element_text(size = 18),
+          plot.title = element_text(size = 18))
+
+#Analysis
+
+# Friedman test
+friedman.test(morning_vigilance ~ period | id, data = morning.vigilance)
+
+#==> Friedman rank sum test
+
+#data:  morning_vigilance and period and id
+#Friedman chi-squared = 15.545, df = 3,
+#p-value = 0.001405
+
+
+# Pairwise posthoc 
+posthoc.friedman.conover.test(y = morning.vigilance$morning_vigilance,
+                              groups = morning.vigilance$period,
+                              blocks = morning.vigilance$id, 
+                              p.adjust.method = 'holm')
+
+#==> Pairwise comparisons using Conover's test for a two-way	
+#                    balanced complete block #design 
+
+#data:  morning.vigilance$morning_vigilance , morning.vigilance$period and morning.vigilance$id 
+
+#     Baseline Fnap    Fno    
+#Fnap 5.1e-07  -       -      
+#Fno  0.00023  0.05253 -      
+#nap  0.32443  6.8e-06 0.00279
+
+#P value adjustment method: holm 
+
+
+
+#one way anova
+
+aov.mornvig <- aov( morning_vigilance ~ period, data =  morning.vigilance)
+
+summary(aov.mornvig)
+#==>   Df Sum Sq Mean Sq F value
+#period       3   5682  1894.0   5.787
+#Residuals   40  13091   327.3        
+#            Pr(>F)   
+#period      0.0022 **
+#Residuals            
+#---
+#Signif. codes:  
+#  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’
+#  0.1 ‘ ’ 1
+
+
+
+
+
+```
+
+
+
+ISCHEMIA
+(still stuck)
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo= TRUE)
+library(dplyr)
+library(tidyr)
+library(readr)
+ischaemic1 <- read_csv("ischemic.csv")
+
+data
+#quick look at the ischemic data
+
+dim(ischaemic1)
+head(ischaemic1)
+tail(ischaemic1)
+names(ischaemic1)
+summary(ischaemic1)
+
+#tidy the data
+##id and period column are not factor.
+### convert id and period into factor
+
+ischaemic <- ischaemic1 %>% 
+  mutate(id = factor(id),
+         period= factor(period))
+ischemic
+
+# Convert to long format table
+ischaemic_analysis <- ischaemic %>%
+    group_by(id, period) %>%
+    gather(key = time, 
+           value = score, 
+          3:23 ) %>%
+    mutate(time = as.numeric(as.character(time)),
+           score/100)
+
+## did not work : isch_try <- ischaemic %>%
+  #  group_by(id, period) %>%
+   # gather(key = time, 
+    #       value = score, 
+     #     3:23 ) %>%
+    #mutate(time = as.numeric(as.character(time)) %>% 
+     #        mutate(id= as.character(id)) %>%
+      #       mutate(period= as.character(period)))
+
+
+ischaemic_analysis
+  
+  
+
+# plot the data
+
+
+ischaemic_analysis
+library(ggplot2)
+plot<- ggplot(data = ischaemic_analysis, aes(x= time, y= score, colour= period, fill= period))+ geom_smooth(method = "auto", alpha= 0.1, size=1)
+library(cowplot)
+library(stringr)
+
+
+
+ischaemic
+
+
+
+#filtered morning data
+morningdata <- read.csv('ischaemic_morningdata.csv')
+
+morningdata <- morningdata %>% 
+  mutate(id = factor(id),
+         period= factor(period))
+### Convert to long format table
+morning_analysis <- morningdata %>%
+    group_by(id, period) %>%
+    gather(key = time, 
+           value = score, 
+          3:23 ) %>%
+    mutate(time = as.numeric(as.character(time)))
+
+ ### plot morning data 
+
+morningplot<- ggplot(data = morning_analysis, aes(x= time, y= score, colour= period, fill= period))+ geom_smooth(method = "auto", alpha= 0.1, size=1)
+
+
+#filter afternoon data
+
+
+
+
+
+morningdata
+dim(morningdata)
+head(morningdata)
+ggplot(morningdata, aes(x= time, y= score, colour= period, fill= period))+ geom_smooth(method = "loess", alpha=0.1, size= 2)
+
+
+
+ggplot(ischaemic_analysis, aes(x = time, y = score, colour = period, 
+    fill = period)) + geom_smooth(method = "loess", alpha = 0.1, size = 1) + 
+    geom_jitter() + facet_grid(period ~ .) + labs(x = "Time (secondes)", 
+    y = "Pain intensity (0-100mm VAS)", title = "pain intensity for 10 minutes after ischaemia is induced")
+
+ggplot(data = ischaemic_analysis, aes(x= time, y= score, colour= period, fill= period))+ geom_smooth(method = "auto", alpha= 0.1, size=1)
+
+
+
+
+
+
+
+
+##analysis
+
+
+library(gamlss)
+library(nlme)
+hist_ischaemia <- histDist(ischaemic_analysis$score, 
+         xlab = "vas",
+         ylab =  "density")
+
+##answer: Family:  c("NO", "Normal") 
+#Fitting method: "nlminb" 
+
+#Call:  
+#gamlssML(formula = ischaemic_analysis$score, family = "NO",  
+ #   data = sys.parent()) 
+
+#Mu Coefficients:
+#[1]  55.96
+#Sigma Coefficients:
+#[1]  3.243
+
+ #Degrees of Freedom for the fit: 2 Residual Deg. of Freedom   1384 
+#Global Deviance:     12923.3 
+ #           AIC:     12927.3 
+  #          SBC:     12937.8 
+
+
+ischemic1 <- lme(score ~ 1, random= ~time|id, data= ischaemic_analysis, method= 'ML')
+summary(ischemic1)
+
+##answer: Linear mixed-effects model fit by maximum likelihood
+  # Data: ischaemic_analysis 
+  #     AIC     BIC    logLik
+  #10694.73 10720.9 -5342.366
+
+#Random effects:
+ #Formula: ~time | id
+ #Structure: General positive-definite, Log-Cholesky parametrization
+ #           StdDev     Corr  
+#(Intercept) 17.7990570 (Intr)
+#time         0.0486926 0.238 
+#Residual    10.9701778       
+
+#Fixed effects: score ~ 1 
+ #              Value Std.Error   DF  t-value p-value
+#(Intercept) 41.94446  5.260063 1375 7.974136       0
+
+#Standardized Within-Group Residuals:
+ #       Min          Q1         Med          Q3         Max 
+#-3.30908812 -0.53781641  0.01257251  0.59342581  3.75354857 
+
+#Number of Observations: 1386
+#Number of Groups: 11
+
+
+ischemic2 <-lme(score ~ time + period, random= ~time|id, data= ischaemic_analysis, method= 'ML')
+ischemic2
+
+##answers
+#Linear mixed-effects model fit by maximum likelihood
+ # Data: ischaemic_analysis 
+  #Log-likelihood: -5292.644
+  #Fixed: score ~ time + period 
+   #   (Intercept)              time periodBaseline_mo 
+    #  41.13321527        0.03665552        4.63636364 
+    #periodFnap_af     periodFnap_mo      periodFno_af 
+     #  0.82251082        3.87445887        5.50216450 
+     #periodFno_mo 
+      # 8.12121212 
+
+#Random effects:
+ #Formula: ~time | id
+ #Structure: General positive-definite, Log-Cholesky parametrization
+  #          StdDev      Corr  
+#(Intercept) 17.54836846 (Intr)
+#time         0.03208113 0.169 
+#Residual    10.61254811       
+
+#number of Observations: 1386
+#Number of Groups: 11 
+summary(ischemic2)
+```
